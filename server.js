@@ -84,30 +84,53 @@ async function sendTelegram(msg) {
   }
 }
 
+// ── SHARED HEADERS (mimic browser) ───────────────────────────
+const BROWSER_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Origin": "https://pump.fun",
+  "Referer": "https://pump.fun/",
+};
+
 // ── FETCH TOKEN DATA FROM PUMP.FUN ───────────────────────────
 async function fetchTokenData(mintAddress) {
-  try {
-    const res = await fetch(
-      `https://frontend-api.pump.fun/coins/${mintAddress}`
-    );
-    if (!res.ok) return null;
-    return await res.json();
-  } catch (e) {
-    return null;
+  // Try Pump.fun API v2 first, fallback to v1
+  const urls = [
+    `https://frontend-api-v2.pump.fun/coins/${mintAddress}`,
+    `https://frontend-api.pump.fun/coins/${mintAddress}`,
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { headers: BROWSER_HEADERS });
+      if (res.ok) return await res.json();
+    } catch (e) {}
   }
+  return null;
 }
 
 // ── FETCH RECENT TOKENS ──────────────────────────────────────
 async function fetchRecentTokens() {
-  try {
-    const res = await fetch(
-      "https://frontend-api.pump.fun/coins?offset=0&limit=20&sort=created_timestamp&order=DESC&includeNsfw=false"
-    );
-    if (!res.ok) return [];
-    return await res.json();
-  } catch (e) {
-    return [];
+  const urls = [
+    "https://frontend-api-v2.pump.fun/coins?offset=0&limit=20&sort=created_timestamp&order=DESC&includeNsfw=false",
+    "https://frontend-api.pump.fun/coins?offset=0&limit=20&sort=created_timestamp&order=DESC&includeNsfw=false",
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { headers: BROWSER_HEADERS });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          log("INFO", `Fetched ${data.length} tokens from Pump.fun`);
+          return data;
+        }
+      }
+    } catch (e) {
+      log("WARN", `Fetch failed: ${url} — ${e.message}`);
+    }
   }
+  log("WARN", "All Pump.fun endpoints failed");
+  return [];
 }
 
 // ── CLAUDE AI DECISION ENGINE ────────────────────────────────
