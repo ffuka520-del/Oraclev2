@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORACLE v2 — AI Trader</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #020408;
+  --surface: #080f18;
+  --card: #0c1622;
+  --border: #0f2035;
+  --border2: #1a3555;
+  --cyan: #00d4ff;
+  --cyan-dim: rgba(0,212,255,0.15);
+  --amber: #ffaa00;
+  --amber-dim: rgba(255,170,0,0.12);
+  --green: #00ff88;
+  --green-dim: rgba(0,255,136,0.1);
+  --red: #ff3355;
+  --red-dim: rgba(255,51,85,0.1);
+  --purple: #9b59ff;
+  --text: #c8ddf0;
+  --muted: #3d6080;
+  --muted2: #1e3d5a;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Scanline overlay */
+body::after {
+  content:'';
+  position:fixed;
+  inset:0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.05) 2px,
+    rgba(0,0,0,0.05) 4px
+  );
+  pointer-events:none;
+  z-index:9999;
+}
+
+/* Grid background */
+body::before {
+  content:'';
+  position:fixed;
+  inset:0;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.02) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events:none;
+  z-index:0;
+}
+
+/* ── HEADER ── */
+.header {
+  position: relative;
+  z-index: 10;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(8,15,24,0.95);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+}
+
+.logo {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  letter-spacing: 4px;
+  color: var(--cyan);
+  text-shadow: 0 0 20px rgba(0,212,255,0.5);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 10px var(--cyan);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%,100% { opacity:1; transform:scale(1); }
+  50% { opacity:0.4; transform:scale(0.8); }
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-badge {
+  font-size: 10px;
+  letter-spacing: 2px;
+  padding: 4px 12px;
+  border-radius: 2px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-offline {
+  color: var(--muted);
+  border: 1px solid var(--muted2);
+  background: transparent;
+}
+
+.status-running {
+  color: var(--green);
+  border: 1px solid rgba(0,255,136,0.3);
+  background: var(--green-dim);
+  animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+  0%,100%{opacity:1} 50%{opacity:0.6}
+}
+
+.mode-toggle {
+  display: flex;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mode-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mode-btn.active-paper {
+  background: var(--amber-dim);
+  color: var(--amber);
+}
+
+.mode-btn.active-live {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+/* ── MAIN LAYOUT ── */
+.main {
+  position: relative;
+  z-index: 1;
+  padding: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ── STATS ROW ── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+@media(max-width:700px) {
+  .stats-row { grid-template-columns: repeat(2,1fr); }
+}
+
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content:'';
+  position:absolute;
+  top:0; left:0; right:0;
+  height:2px;
+}
+
+.stat-card.cyan::before { background: linear-gradient(90deg, transparent, var(--cyan), transparent); }
+.stat-card.amber::before { background: linear-gradient(90deg, transparent, var(--amber), transparent); }
+.stat-card.green::before { background: linear-gradient(90deg, transparent, var(--green), transparent); }
+.stat-card.purple::before { background: linear-gradient(90deg, transparent, var(--purple), transparent); }
+
+.stat-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.stat-card.cyan .stat-value { color: var(--cyan); }
+.stat-card.amber .stat-value { color: var(--amber); }
+.stat-card.green .stat-value { color: var(--green); }
+.stat-card.purple .stat-value { color: var(--purple); }
+
+.stat-sub {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ── GRID ── */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+@media(max-width:700px) {
+  .grid-2 { grid-template-columns: 1fr; }
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+@media(max-width:700px) {
+  .grid-3 { grid-template-columns: 1fr; }
+}
+
+/* ── PANEL ── */
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0,0,0,0.2);
+}
+
+.panel-title {
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--cyan);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.panel-body {
+  padding: 14px 16px;
+}
+
+/* ── CONTROLS ── */
+.controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  padding: 8px 20px;
+  border-radius: 3px;
+  border: 1px solid;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-weight: 600;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-start {
+  background: var(--green-dim);
+  color: var(--green);
+  border-color: rgba(0,255,136,0.3);
+}
+
+.btn-start:hover {
+  background: rgba(0,255,136,0.2);
+  box-shadow: 0 0 16px rgba(0,255,136,0.2);
+}
+
+.btn-stop {
+  background: var(--red-dim);
+  color: var(--red);
+  border-color: rgba(255,51,85,0.3);
+}
+
+.btn-stop:hover {
+  background: rgba(255,51,85,0.2);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--border2);
+}
+
+.btn-ghost:hover {
+  color: var(--text);
+  border-color: var(--border2);
+  background: rgba(255,255,255,0.03);
+}
+
+.btn-analyze {
+  background: var(--amber-dim);
+  color: var(--amber);
+  border-color: rgba(255,170,0,0.3);
+}
+
+.btn-analyze:hover {
+  background: rgba(255,170,0,0.2);
+}
+
+/* ── CONFIG FIELDS ── */
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media(max-width:500px) { .config-grid { grid-template-columns: 1fr; } }
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.field input, .field select {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 3px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.field input:focus, .field select:focus {
+  border-color: var(--cyan);
+}
+
+.field select option {
+  background: var(--surface);
+}
+
+/* ── TRADES TABLE ── */
+.trades-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.trades-list::-webkit-scrollbar { width: 4px; }
+.trades-list::-webkit-scrollbar-track { background: transparent; }
+.trades-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.trade-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 11px;
+}
+
+.trade-symbol {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cyan);
+  min-width: 70px;
+}
+
+.trade-info { color: var(--muted); font-size: 10px; line-height: 1.6; }
+
+.trade-conf {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 2px;
+  text-align: center;
+}
+
+.trade-pnl {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  min-width: 80px;
+}
+
+.pnl-pos { color: var(--green); }
+.pnl-neg { color: var(--red); }
+.pnl-open { color: var(--amber); animation: blink 2s infinite; }
+
+.conf-high { background: var(--green-dim); color: var(--green); }
+.conf-med { background: var(--amber-dim); color: var(--amber); }
+.conf-low { background: var(--red-dim); color: var(--red); }
+
+/* ── AI ANALYSIS PANEL ── */
+.analysis-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 14px;
+  font-size: 11px;
+  line-height: 1.8;
+  min-height: 120px;
+}
+
+.analysis-empty {
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
+  padding: 30px 0;
+}
+
+.analysis-decision {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dec-buy { color: var(--green); text-shadow: 0 0 20px rgba(0,255,136,0.4); }
+.dec-skip { color: var(--red); text-shadow: 0 0 20px rgba(255,51,85,0.4); }
+.dec-watch { color: var(--amber); text-shadow: 0 0 20px rgba(255,170,0,0.4); }
+
+.analysis-reasoning {
+  color: var(--text);
+  margin-bottom: 12px;
+  padding: 10px;
+  background: rgba(0,0,0,0.3);
+  border-left: 2px solid var(--cyan);
+  border-radius: 0 4px 4px 0;
+}
+
+.flags-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.flag-box {
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.flag-green { background: var(--green-dim); border: 1px solid rgba(0,255,136,0.15); color: #80ffb8; }
+.flag-red { background: var(--red-dim); border: 1px solid rgba(255,51,85,0.15); color: #ffaabb; }
+.flag-title { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; opacity: 0.7; display: block; }
+
+/* ── LOG CONSOLE ── */
+.log-console {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 10px;
+  padding: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1.8;
+}
+
+.log-console::-webkit-scrollbar { width: 3px; }
+.log-console::-webkit-scrollbar-thumb { background: var(--border2); }
+
+.log-entry { display: flex; gap: 10px; }
+.log-time { color: var(--muted); flex-shrink: 0; }
+.log-level-INFO { color: var(--cyan); }
+.log-level-TRADE { color: var(--green); }
+.log-level-AI { color: var(--purple); }
+.log-level-SKIP { color: var(--muted); }
+.log-level-ERROR { color: var(--red); }
+.log-level-WARN { color: var(--amber); }
+.log-level-LIVE { color: var(--green); font-weight: 700; }
+.log-msg { color: var(--text); flex: 1; }
+
+/* ── MANUAL ANALYZE ── */
+.mint-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.mint-input-row input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 8px 12px;
+  border-radius: 3px;
+  outline: none;
+}
+
+.mint-input-row input:focus { border-color: var(--amber); }
+
+/* ── BACKEND URL BANNER ── */
+.url-banner {
+  background: rgba(255,170,0,0.06);
+  border: 1px solid rgba(255,170,0,0.2);
+  border-radius: 4px;
+  padding: 10px 14px;
+  font-size: 11px;
+  color: var(--amber);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.url-banner input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  outline: none;
+}
+
+.conn-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.conn-ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.conn-fail { background: var(--red); box-shadow: 0 0 8px var(--red); }
+.conn-pending { background: var(--amber); animation: pulse 1s infinite; }
+
+/* ── WINRATE BAR ── */
+.winrate-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.winrate-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--green), var(--cyan));
+  transition: width 0.5s ease;
+}
+
+/* Loading spinner */
+.spinner {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border: 2px solid rgba(0,212,255,0.2);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Animated entry */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.trade-item { animation: slideIn 0.3s ease; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">
+    <div class="logo-dot" id="statusDot"></div>
+    ORACLE <span style="color:var(--amber)">v2</span>
+  </div>
+  <div class="header-right">
+    <div class="mode-toggle">
+      <button class="mode-btn" id="btnPaper" onclick="setMode('paper')">PAPER</button>
+      <button class="mode-btn" id="btnLive" onclick="setMode('live')">LIVE</button>
+    </div>
+    <div class="status-badge status-offline" id="statusBadge">OFFLINE</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- BACKEND URL -->
+  <div class="url-banner">
+    <div class="conn-dot conn-pending" id="connDot"></div>
+    <span style="flex-shrink:0;font-size:10px;letter-spacing:1px;">BACKEND:</span>
+    <input type="text" id="backendUrl" value="http://localhost:3000" placeholder="https://your-app.railway.app" onchange="checkConnection()">
+    <button class="btn btn-ghost" style="padding:4px 10px;font-size:9px;" onclick="checkConnection()">PING</button>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="stat-card cyan">
+      <div class="stat-label">Balance (SOL)</div>
+      <div class="stat-value" id="balance">1.0000</div>
+      <div class="stat-sub" id="balanceMode">Paper Mode</div>
+    </div>
+    <div class="stat-card amber">
+      <div class="stat-label">Win Rate</div>
+      <div class="stat-value" id="winrate">0%</div>
+      <div class="winrate-bar"><div class="winrate-fill" id="winrateBar" style="width:0%"></div></div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Total PnL</div>
+      <div class="stat-value" id="pnl">+0.0000</div>
+      <div class="stat-sub" id="tradeCount">0 trades</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="stat-label">Active Positions</div>
+      <div class="stat-value" id="activePos">0</div>
+      <div class="stat-sub">open now</div>
+    </div>
+  </div>
+
+  <!-- CONTROLS + CONFIG -->
+  <div class="grid-2" style="margin-bottom:12px;">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">⚡ Control Center</span>
+      </div>
+      <div class="panel-body">
+        <div class="controls" style="margin-bottom:14px;">
+          <button class="btn btn-start" id="btnStart" onclick="startBot()">▶ START BOT</button>
+          <button class="btn btn-stop" id="btnStop" onclick="stopBot()" disabled>■ STOP</button>
+          <button class="btn btn-ghost" onclick="resetPaper()">↺ RESET PAPER</button>
+        </div>
+        <div class="config-grid">
+          <div class="field">
+            <label>Min Confidence %</label>
+            <input type="number" id="cfgConfidence" value="75" min="50" max="95" onchange="saveConfig()">
+          </div>
+          <div class="field">
+            <label>Trade Size (SOL)</label>
+            <input type="number" id="cfgSize" value="0.05" min="0.01" step="0.01" onchange="saveConfig()">
+          </div>
+          <div class="field">
+            <label>Stop Loss %</label>
+            <input type="number" id="cfgSL" value="25" min="10" max="50" onchange="saveConfig()">
+          </div>
+          <div class="field">
+            <label>Take Profit %</label>
+            <input type="number" id="cfgTP" value="50" min="20" max="200" onchange="saveConfig()">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MANUAL ANALYZE -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">🔮 Manual Analyze</span>
+      </div>
+      <div class="panel-body">
+        <div class="mint-input-row" style="margin-bottom:10px;">
+          <input type="text" id="mintInput" placeholder="Paste token mint address...">
+          <button class="btn btn-analyze" onclick="manualAnalyze()">ANALYZE</button>
+        </div>
+        <div class="analysis-box" id="analysisBox">
+          <div class="analysis-empty">Paste a mint address and click ANALYZE<br>to run Claude AI analysis</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRADES + LOG -->
+  <div class="grid-3">
+    <!-- TRADES -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">📊 Trade History</span>
+        <span style="font-size:10px;color:var(--muted)" id="tradeCountHeader">0 total</span>
+      </div>
+      <div class="panel-body" style="padding:10px;">
+        <div class="trades-list" id="tradesList">
+          <div style="text-align:center;padding:30px 0;color:var(--muted);font-size:11px;">
+            No trades yet.<br>Start the bot to begin.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOG CONSOLE -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">📡 Console</span>
+        <button class="btn btn-ghost" style="padding:2px 8px;font-size:9px;" onclick="clearLogs()">CLR</button>
+      </div>
+      <div class="panel-body" style="padding:8px;">
+        <div class="log-console" id="logConsole">
+          <div class="log-entry">
+            <span class="log-time">--:--:--</span>
+            <span class="log-level-INFO">[INFO]</span>
+            <span class="log-msg">ORACLE v2 dashboard loaded. Connect to backend to begin.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────
+let currentMode = 'paper';
+let isRunning = false;
+let pollInterval = null;
+let lastLogTime = null;
+
+// ── BACKEND URL ──────────────────────────────────────────────
+function getUrl(path) {
+  const base = document.getElementById('backendUrl').value.replace(/\/$/, '');
+  return base + path;
+}
+
+// ── CONNECTION CHECK ─────────────────────────────────────────
+async function checkConnection() {
+  const dot = document.getElementById('connDot');
+  dot.className = 'conn-dot conn-pending';
+  try {
+    const res = await fetch(getUrl('/health'), { signal: AbortSignal.timeout(4000) });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      dot.className = 'conn-dot conn-ok';
+      addLocalLog('INFO', 'Backend connected ✓ (ORACLE v2)');
+      fetchState();
+      return true;
+    }
+  } catch(e) {
+    dot.className = 'conn-dot conn-fail';
+    addLocalLog('ERROR', 'Cannot connect to backend: ' + getUrl(''));
+  }
+  return false;
+}
+
+// ── SET MODE ─────────────────────────────────────────────────
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('btnPaper').className = 'mode-btn' + (mode === 'paper' ? ' active-paper' : '');
+  document.getElementById('btnLive').className = 'mode-btn' + (mode === 'live' ? ' active-live' : '');
+  document.getElementById('balanceMode').textContent = mode === 'paper' ? 'Paper Mode' : '🔴 Live Mode';
+  fetch(getUrl('/api/config'), {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ mode })
+  }).catch(() => {});
+}
+
+// ── SAVE CONFIG ───────────────────────────────────────────────
+function saveConfig() {
+  const conf = {
+    confidence_threshold: parseInt(document.getElementById('cfgConfidence').value),
+    max_trade_size_sol: parseFloat(document.getElementById('cfgSize').value),
+    stop_loss_pct: parseInt(document.getElementById('cfgSL').value),
+    take_profit_pct: parseInt(document.getElementById('cfgTP').value),
+  };
+  fetch(getUrl('/api/config'), {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(conf)
+  }).catch(() => {});
+}
+
+// ── START BOT ─────────────────────────────────────────────────
+async function startBot() {
+  const ok = await checkConnection();
+  if (!ok) return;
+  try {
+    const res = await fetch(getUrl('/api/start'), { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      isRunning = true;
+      updateRunningUI(true);
+      if (!pollInterval) pollInterval = setInterval(fetchState, 5000);
+    }
+  } catch(e) { addLocalLog('ERROR', 'Start failed: ' + e.message); }
+}
+
+// ── STOP BOT ──────────────────────────────────────────────────
+async function stopBot() {
+  try {
+    await fetch(getUrl('/api/stop'), { method: 'POST' });
+    isRunning = false;
+    updateRunningUI(false);
+  } catch(e) {}
+}
+
+// ── RESET PAPER ───────────────────────────────────────────────
+async function resetPaper() {
+  if (!confirm('Reset paper trading? All trades will be cleared.')) return;
+  try {
+    await fetch(getUrl('/api/reset-paper'), { method: 'POST' });
+    fetchState();
+    addLocalLog('INFO', 'Paper trading reset. Balance: 1.0 SOL');
+  } catch(e) {}
+}
+
+// ── UPDATE UI RUNNING STATE ───────────────────────────────────
+function updateRunningUI(running) {
+  const badge = document.getElementById('statusBadge');
+  const dot = document.getElementById('statusDot');
+  const btnStart = document.getElementById('btnStart');
+  const btnStop = document.getElementById('btnStop');
+
+  if (running) {
+    badge.className = 'status-badge status-running';
+    badge.textContent = '● RUNNING';
+    dot.style.background = 'var(--green)';
+    dot.style.boxShadow = '0 0 10px var(--green)';
+    btnStart.disabled = true;
+    btnStop.disabled = false;
+  } else {
+    badge.className = 'status-badge status-offline';
+    badge.textContent = 'OFFLINE';
+    dot.style.background = 'var(--cyan)';
+    dot.style.boxShadow = '0 0 10px var(--cyan)';
+    btnStart.disabled = false;
+    btnStop.disabled = true;
+  }
+}
+
+// ── FETCH STATE ────────────────────────────────────────────────
+async function fetchState() {
+  try {
+    const res = await fetch(getUrl('/api/state'));
+    const state = await res.json();
+    updateStats(state);
+    updateTrades(state.trades || []);
+    updateLogs(state.logs || []);
+    isRunning = state.running;
+    updateRunningUI(state.running);
+    if (state.mode) setMode(state.mode);
+  } catch(e) {}
+}
+
+// ── UPDATE STATS ───────────────────────────────────────────────
+function updateStats(state) {
+  const balance = state.mode === 'paper' ? state.paperBalance : state.liveBalance;
+  document.getElementById('balance').textContent = parseFloat(balance || 0).toFixed(4);
+
+  const { total, wins, pnl_sol } = state.stats || {};
+  const wr = total > 0 ? ((wins / total) * 100).toFixed(1) : 0;
+  document.getElementById('winrate').textContent = wr + '%';
+  document.getElementById('winrateBar').style.width = wr + '%';
+
+  const pnl = parseFloat(pnl_sol || 0);
+  const pnlEl = document.getElementById('pnl');
+  pnlEl.textContent = (pnl >= 0 ? '+' : '') + pnl.toFixed(4);
+  pnlEl.style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+
+  document.getElementById('tradeCount').textContent = (total || 0) + ' trades';
+  document.getElementById('activePos').textContent = Object.keys(state.activePositions || {}).length;
+  document.getElementById('tradeCountHeader').textContent = (total || 0) + ' total';
+}
+
+// ── UPDATE TRADES ──────────────────────────────────────────────
+function updateTrades(trades) {
+  const list = document.getElementById('tradesList');
+  if (!trades || trades.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:30px 0;color:var(--muted);font-size:11px;">No trades yet.</div>';
+    return;
+  }
+
+  list.innerHTML = trades.slice(0, 30).map(t => {
+    const conf = t.analysis?.confidence || 0;
+    const confClass = conf >= 80 ? 'conf-high' : conf >= 65 ? 'conf-med' : 'conf-low';
+    const isOpen = t.status === 'open';
+
+    let pnlHtml = '';
+    if (isOpen) {
+      pnlHtml = `<div class="trade-pnl pnl-open">OPEN</div>`;
+    } else {
+      const pnl = t.pnl_pct || 0;
+      pnlHtml = `<div class="trade-pnl ${pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${pnl >= 0 ? '+' : ''}${parseFloat(pnl).toFixed(1)}%</div>`;
+    }
+
+    const age = Math.floor((Date.now() - t.openTime) / 1000 / 60);
+
+    return `<div class="trade-item">
+      <div class="trade-symbol">${(t.symbol || 'UNK').substring(0,8)}</div>
+      <div class="trade-info">
+        ${t.size_sol} SOL · ${age}m ago<br>
+        ${t.mode?.toUpperCase() || 'PAPER'} · ${t.analysis?.risk_level?.toUpperCase() || '—'}
+      </div>
+      <span class="trade-conf ${confClass}">${conf}%</span>
+      ${pnlHtml}
+    </div>`;
+  }).join('');
+}
+
+// ── UPDATE LOGS ────────────────────────────────────────────────
+function updateLogs(logs) {
+  if (!logs || logs.length === 0) return;
+  const console_el = document.getElementById('logConsole');
+  const newLogs = lastLogTime ? logs.filter(l => l.time > lastLogTime) : logs.slice(0, 30);
+  if (newLogs.length === 0) return;
+  lastLogTime = logs[0]?.time;
+
+  const html = newLogs.map(l => {
+    const t = new Date(l.time).toTimeString().split(' ')[0];
+    return `<div class="log-entry">
+      <span class="log-time">${t}</span>
+      <span class="log-level-${l.level}">[${l.level}]</span>
+      <span class="log-msg">${l.msg}</span>
+    </div>`;
+  }).join('');
+
+  console_el.innerHTML = html + console_el.innerHTML;
+  // Trim old
+  while (console_el.children.length > 100) console_el.removeChild(console_el.lastChild);
+}
+
+function addLocalLog(level, msg) {
+  const console_el = document.getElementById('logConsole');
+  const t = new Date().toTimeString().split(' ')[0];
+  const el = document.createElement('div');
+  el.className = 'log-entry';
+  el.innerHTML = `<span class="log-time">${t}</span><span class="log-level-${level}">[${level}]</span><span class="log-msg">${msg}</span>`;
+  console_el.prepend(el);
+}
+
+function clearLogs() {
+  document.getElementById('logConsole').innerHTML = '';
+  lastLogTime = null;
+}
+
+// ── MANUAL ANALYZE ─────────────────────────────────────────────
+async function manualAnalyze() {
+  const mint = document.getElementById('mintInput').value.trim();
+  if (!mint) return;
+
+  const box = document.getElementById('analysisBox');
+  box.innerHTML = `<div class="analysis-empty"><span class="spinner"></span> Claude analyzing token...</div>`;
+
+  try {
+    const res = await fetch(getUrl('/api/analyze'), {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ mint })
+    });
+
+    if (!res.ok) { box.innerHTML = `<div class="analysis-empty" style="color:var(--red)">Token not found or API error.</div>`; return; }
+
+    const { tokenData, analysis } = await res.json();
+    if (!analysis) { box.innerHTML = `<div class="analysis-empty" style="color:var(--red)">Claude analysis failed.</div>`; return; }
+
+    const decClass = analysis.decision === 'BUY' ? 'dec-buy' : analysis.decision === 'SKIP' ? 'dec-skip' : 'dec-watch';
+    const decEmoji = analysis.decision === 'BUY' ? '▲' : analysis.decision === 'SKIP' ? '✕' : '◉';
+
+    box.innerHTML = `
+      <div class="analysis-decision">
+        <span class="${decClass}">${decEmoji} ${analysis.decision}</span>
+        <span style="font-size:13px;color:var(--muted);font-family:'JetBrains Mono'">${analysis.confidence}% CONFIDENCE</span>
+        <span style="font-size:11px;padding:2px 8px;border-radius:2px;background:var(--amber-dim);color:var(--amber)">${analysis.risk_level?.toUpperCase()}</span>
+      </div>
+      <div class="analysis-reasoning">${analysis.reasoning}</div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:8px;">
+        Exit target: <span style="color:var(--green)">+${analysis.exit_target_pct || '—'}%</span> &nbsp;|&nbsp;
+        Stop loss: <span style="color:var(--red)">-${analysis.stop_loss_pct || '—'}%</span> &nbsp;|&nbsp;
+        Token: <span style="color:var(--cyan)">${tokenData.symbol || 'UNKNOWN'}</span>
+      </div>
+      <div class="flags-row">
+        <div class="flag-box flag-green">
+          <span class="flag-title">🟢 Green Flags</span>
+          ${(analysis.green_flags || []).map(f => `• ${f}`).join('<br>') || '• None identified'}
+        </div>
+        <div class="flag-box flag-red">
+          <span class="flag-title">🔴 Red Flags</span>
+          ${(analysis.red_flags || []).map(f => `• ${f}`).join('<br>') || '• None identified'}
+        </div>
+      </div>
+    `;
+  } catch(e) {
+    box.innerHTML = `<div class="analysis-empty" style="color:var(--red)">Error: ${e.message}</div>`;
+  }
+}
+
+// ── INIT ───────────────────────────────────────────────────────
+document.getElementById('btnPaper').className = 'mode-btn active-paper';
+document.getElementById('btnStop').disabled = true;
+
+// Auto-check connection
+setTimeout(checkConnection, 800);
+</script>
+</body>
+</html>
